@@ -233,12 +233,9 @@ class AdvancedTrafficController:
             base_green_time = self.phase_timings.get(self.current_phase, 0)
             max_total_time = base_green_time + self.config.max_extension
             if self.current_phase_elapsed >= max_total_time:
-                # Force transition to yellow
-                direction = self._get_direction_from_phase(self.current_phase)
-                print(f"DEBUG: Forcing transition from {self.current_phase.value} after {self.current_phase_elapsed:.1f}s (max: {max_total_time:.1f}s)")
-                self.current_phase = self.yellow_phases[self.current_phase]
-                self.current_phase_elapsed = 0.0
-                return self.current_phase
+                # Clamp current_duration to max_total_time so normal transition logic will trigger
+                # This ensures proper recording of phase duration and vehicle processing
+                current_duration = max_total_time
         
         # Check if phase should transition
         if self.current_phase_elapsed >= current_duration:
@@ -308,6 +305,14 @@ class AdvancedTrafficController:
             age_factor = 1.0 / (i + 2)  # Older phases get less penalty
             pressures[direction] *= (1.0 - 0.3 * age_factor)  # Reduce by up to 30%
         
+        # Enforce min_phase_cycle: prevent same direction from being selected too soon
+        if len(self.phase_history) >= self.config.min_phase_cycle:
+            most_recent = self.phase_history[-1]  # Last served direction
+            # Check if we're about to select the same direction
+            # If so, temporarily reduce its pressure significantly to force a different choice
+            if most_recent in pressures:
+                pressures[most_recent] *= 0.1  # 90% reduction to prevent immediate repeat
+        
         # Find direction with maximum pressure
         max_direction = max(pressures.keys(), key=lambda d: pressures[d])
         
@@ -355,23 +360,29 @@ class AdvancedTrafficController:
         return min(extension, self.config.max_extension)
     
     def _record_vehicles_processed(self):
-        """Estimate vehicles processed during current green phase"""
+        """Estimate vehicles processed during current green phase (called automatically on phase transition)"""
         if self.current_phase not in self.green_phases:
             return
-        
+
         direction = self._get_direction_from_phase(self.current_phase)
         if not direction:
             return
-        
+
         # Estimate based on green duration and saturation flow (2 vehicles/sec)
         saturation_flow = 2.0  # vehicles per second
         estimated_processed = min(
             self.vehicle_counts[direction],
             saturation_flow * self.current_phase_elapsed
         )
-        
+
         self.direction_vehicles_processed[direction] += estimated_processed
         self.total_vehicles_processed += estimated_processed
+
+    def add_vehicles_processed(self, direction: str, count: int):
+        """Add actual processed vehicles (called by simulator when known)"""
+        if direction in ['north', 'south', 'east', 'west']:
+            self.direction_vehicles_processed[direction] += count
+            self.total_vehicles_processed += count
     
     def get_status(self) -> Dict:
         """Get complete status of traffic light controller"""
@@ -417,11 +428,6 @@ class AdvancedTrafficController:
             return 0.0
         
         total_time = sum(d['duration'] for d in self.actual_phase_durations)
-        green_time = sum(d['duration'] for d in self.actual_phase_durations 
-                        if 'GREEN' in d['phase'])
-        
-        return (green_time / 2.0)
-        
         green_time = sum(d['duration'] for d in self.actual_phase_durations 
                         if any(green.value in d['phase'] for green in self.green_phases))
         

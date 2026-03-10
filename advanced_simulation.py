@@ -28,7 +28,7 @@ class AdvancedTrafficSimulator:
         
         # Traffic generation parameters
         config = controller_config or AdvancedTrafficConfig()
-        self.arrival_rate = 1.2  # vehicles per second per direction (base)
+        self.arrival_rate = 0.3  # vehicles per second per direction (base) - sustainable rate
         self.saturation_flow = 2.0  # vehicles per second when green
         
         # History for analysis
@@ -134,6 +134,9 @@ class AdvancedTrafficSimulator:
         vehicles_discharged = 0
         if green_direction:
             vehicles_discharged = self.discharge_traffic(green_direction, delta_time)
+            # Report actual discharged vehicles to controller for accurate metrics
+            if vehicles_discharged > 0:
+                self.controller.add_vehicles_processed(green_direction, vehicles_discharged)
         
         # Update controller with current vehicle counts
         self.controller.update_vehicle_counts(
@@ -378,13 +381,13 @@ def main():
     """Main entry point for advanced simulation"""
     # Create configuration
     config = AdvancedTrafficConfig(
-        min_green_time=8.0,
-        max_green_time=35.0,
+        min_green_time=10.0,    # Slightly higher minimum for stability
+        max_green_time=60.0,    # Higher maximum to handle heavy traffic
         yellow_time=3.0,
         all_red_time=2.0,
         vehicle_threshold=3,
         extension_per_vehicle=0.7,
-        max_extension=20.0,
+        max_extension=25.0,     # Higher extension cap
         gap_time=2.0,
         min_phase_cycle=2,
         pressure_threshold=1.3
