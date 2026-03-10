@@ -5,7 +5,7 @@ An advanced traffic light control system with **max-pressure adaptive timing alg
 ## Features
 
 ### Core Algorithm (Advanced)
-- **Individual Direction Control**: Treats N, S, E, W as separate directions (not paired)
+- **Individual Direction Control**: Treats N, S, E, W as separate directions
 - **Max-Pressure Control**: Dynamically allocates green time based on traffic pressure (queue^0.7 × arrival rate)
 - **Fairness Penalties**: Prevents starvation with recency-based pressure reduction
 - **Adaptive Extensions**: Extends green phases based on vehicle count and pressure ratio
@@ -26,21 +26,6 @@ An advanced traffic light control system with **max-pressure adaptive timing alg
 ### Advanced Simulation (Individual Direction Control)
 ```bash
 python advanced_simulation.py
-```
-
-### Basic Simulation (Paired Directions)
-```bash
-python simple_simulation.py
-```
-
-### Graphical Visualization
-```bash
-python visualize.py
-```
-
-### Pressure Test (High Traffic)
-```bash
-python pressure_test.py
 ```
 
 ### Advanced Controller Tests
@@ -66,22 +51,6 @@ python simple_advanced_test.py
 | `gap_time` | 2.0 s | Gap between last vehicle and phase end |
 | `min_phase_cycle` | 2 | Minimum phases before returning to same direction |
 | `pressure_threshold` | 1.2 | Pressure ratio threshold for switching |
-
-### EnhancedTrafficLightConfig (Paired Direction Control)
-**Used by**: `simple_simulation.py`, `traffic_light_controller.py`
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `min_green_time` | 12.0 s | Minimum green light duration (NS or EW) |
-| `max_green_time` | 60.0 s | Maximum green light duration (NS or EW) |
-| `yellow_time` | 3.5 s | Yellow light duration |
-| `all_red_time` | 2.0 s | All-red clearance interval |
-| `vehicle_threshold` | 4 | Minimum vehicles to consider extension |
-| `extension_per_vehicle` | 0.6 s | Seconds added per vehicle |
-| `max_extension` | 15.0 s | Maximum extension beyond base time |
-| `gap_time` | 2.5 s | Gap between last vehicle and phase end |
-| `arrival_rate` | 1.0 veh/s | Base vehicle arrival rate per direction |
-| `saturation_flow` | 2.5 veh/s | Discharge rate when green |
 
 ## Algorithm: Max-Pressure Control (Individual Direction)
 
@@ -132,33 +101,6 @@ The algorithm prevents starvation through multiple mechanisms:
 10. WEST_GREEN → 11. WEST_YELLOW → 12. ALL_RED (repeat)
 
 **Note**: The actual sequence is dynamic based on pressure calculations. The system selects the next direction with highest adjusted pressure during ALL_RED phase.
-
-## Visualization
-
-### Terminal Display
-```
-Step 45 | Phase: NS_GREEN           | N: 12 S: 15 E: 8 W: 9 | Throughput: 142.5
-[████████░░░░░░░░] 12.3/35.7s
-```
-- Live queue counts for all 4 directions
-- Draining countdown bar (█ fills, ░ empties)
-- Remaining time / Total allocated time
-
-### Graphical Analysis (visualize.py)
-
-**6 Interactive Charts:**
-1. **Queue Lengths** - Individual N/S/E/W queues over time
-2. **Total Congestion** - Combined queue + NS/EW breakdown
-3. **Throughput** - Real-time vehicles/min + cumulative total
-4. **Queue Balance** - NS minus EW (fairness indicator)
-5. **Green Time Durations** - Scatter plot of allocated green times
-6. **Traffic Pressure** - Queue × arrival rate urgency index
-
-**Additional Outputs:**
-- Phase timeline with color-coded transitions
-- Summary statistics box with key metrics
-- Real-time updates (100-point sliding window)
-- Final static analysis after simulation
 
 ## Performance
 
@@ -219,15 +161,8 @@ print(f"Remaining: {status['remaining_time']:.1f}s")
 traffic_simulation/
 ├── advanced_traffic_controller.py  # Individual direction max-pressure controller
 ├── advanced_simulation.py          # Advanced simulation with individual control
-├── traffic_light_controller.py    # Paired direction max-pressure controller
-├── simple_simulation.py           # Basic simulation with paired control
-├── visualize.py                   # Graphical visualization (6 charts)
-├── pressure_test.py               # High-load stress testing
-├── enhanced_config.py             # Config for paired direction system
-├── advanced_config.py (if exists) # Config for individual direction system
 ├── test_advanced_controller.py    # Advanced controller test suite
 ├── simple_advanced_test.py        # Simple advanced controller test
-├── compare_systems.py             # Compare both systems
 ├── requirements.txt               # Dependencies (numpy, matplotlib)
 ├── README.md                      # This file
 ├── CODE_WORKFLOW.md               # Architecture & data flow
@@ -253,15 +188,6 @@ traffic_simulation/
 - **Adaptive**: Learns arrival rates over time (EMA with α=0.3)
 - **Efficient**: Only extends when necessary, bounded by max_extension
 - **Individual**: Treats each direction separately for optimal allocation
-
-### Key Improvements Over Paired System
-| Aspect | Paired (NS/EW) | Individual (N/S/E/W) |
-|--------|----------------|---------------------|
-| Control granularity | Direction pairs | Individual directions |
-| Fairness | Good | Excellent |
-| Adaptability | Moderate | High |
-| Efficiency | 65-75% | 70-80% |
-| Response to asymmetry | Limited | Excellent |
 
 ### Parameter Effects
 | Parameter | Increase → | Decrease → |
@@ -304,7 +230,3 @@ traffic_simulation/
 - **CODE_WORKFLOW.md** - Architecture, data flow, class relationships
 - **TIMING_ALGORITHM.md** - Detailed algorithm explanation with examples
 - **EFFICIENCY_ANALYSIS.md** - Performance metrics and comparisons
-
-## License
-
-Educational project demonstrating adaptive traffic control algorithms.
