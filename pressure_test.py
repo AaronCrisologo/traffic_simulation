@@ -1,8 +1,13 @@
 """Test max-pressure algorithm with higher traffic load"""
 import time
 import random
+import sys
+import os
 from simple_simulation import SimpleTrafficSimulator
 from enhanced_config import EnhancedTrafficLightConfig
+
+# Add current directory to path to ensure visualize.py can be imported
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 config = EnhancedTrafficLightConfig(
     min_green_time=12.0,
@@ -72,3 +77,11 @@ print(f"Final queues: N={sim.queues['north']}, S={sim.queues['south']}, "
 print(f"Total vehicles processed: {sim.controller.total_vehicles_processed}")
 print(f"Average throughput: {status['performance']['vehicle_throughput']:.1f} vehicles/min")
 print("=" * 100)
+
+# Launch visualizer with its own simulation (keeps window open until you close it)
+print("\nLaunching visualization with its own simulation...")
+print("The plot window will stay open. Close it to exit.")
+print()
+
+from visualize import run_visualization
+run_visualization()
