@@ -49,17 +49,13 @@ class TrafficVisualizer:
             'ALL_RED': 'red'
         }
         
-        # Setup figure
-        plt.ion()  # Interactive mode
-        self.fig, (self.ax1, self.ax2, self.ax3) = plt.subplots(3, 1, figsize=(12, 8))
-        self.fig.suptitle('Traffic Simulation Real-Time Visualization', fontsize=14, fontweight='bold')
-        
-        # Initialize plots
+        # Initialize plots (creates figure and axes)
         self.setup_plots()
         
     def setup_plots(self):
         """Initialize the six subplots"""
         # Create 6 subplots (3x2 grid)
+        plt.ion()  # Enable interactive mode
         self.fig, ((self.ax1, self.ax2), (self.ax3, self.ax4), (self.ax5, self.ax6)) = plt.subplots(3, 2, figsize=(14, 10))
         self.fig.suptitle('Traffic Simulation Real-Time Visualization', fontsize=14, fontweight='bold')
         
@@ -101,6 +97,7 @@ class TrafficVisualizer:
         self.ax6.grid(True, alpha=0.3)
         
         plt.tight_layout()
+        plt.show(block=False)  # Show figure without blocking
         
     def update(self, step, result, status):
         """Update visualization with new data point"""
@@ -420,7 +417,7 @@ class TrafficVisualizer:
         return summary
 
 
-def run_visualization():
+def run_visualization(num_steps=200):
     """Run simulation with real-time visualization"""
     config = EnhancedTrafficLightConfig(
         min_green_time=12.0,
@@ -436,16 +433,17 @@ def run_visualization():
     )
     
     sim = SimpleTrafficSimulator(config)
-    visualizer = TrafficVisualizer(sim, max_points=100)
+    visualizer = TrafficVisualizer(sim, max_points=10000)
     
     print("=" * 100)
     print("RUNNING SIMULATION WITH REAL-TIME VISUALIZATION")
     print("=" * 100)
+    print(f"Simulation steps: {num_steps}")
     print("Close the plot window to stop the simulation early.")
     print()
     
     try:
-        for i in range(200):
+        for i in range(num_steps):
             # Dynamic arrival rate
             base_rate = 1.0
             cycle_position = i % 120

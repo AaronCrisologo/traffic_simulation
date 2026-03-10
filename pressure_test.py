@@ -24,6 +24,9 @@ config = EnhancedTrafficLightConfig(
 
 sim = SimpleTrafficSimulator(config)
 
+# Number of simulation steps - change this to match your desired length
+NUM_STEPS = 50
+
 print("=" * 100)
 print("MAX-PRESSURE ALGORITHM TEST - Higher Traffic Load")
 print("=" * 100)
@@ -54,7 +57,7 @@ def draw_countdown_bar(remaining: float, total: float, width: int = 20, is_green
     bar = "█" * filled + "░" * empty
     return f"[{bar}] {remaining:.1f}/{total:.1f}s"
 
-for i in range(500):
+for i in range(NUM_STEPS):
     # Dynamic arrival rate: mostly below discharge (2.5), occasional brief spikes
     base_rate = 1.0  # average arrival rate - comfortably below saturation flow
     
@@ -119,4 +122,4 @@ print("The plot window will stay open. Close it to exit.")
 print()
 
 from visualize import run_visualization
-run_visualization()
+run_visualization(num_steps=NUM_STEPS)  # Match the number of steps used in this test
