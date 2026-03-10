@@ -28,9 +28,10 @@ class SimpleTrafficSimulator:
             'west': 0
         }
 
-        # Traffic generation parameters
-        self.arrival_rate = 1.5  # vehicles per second per direction (higher for demo)
-        self.saturation_flow = 2.0  # vehicles per second when green
+        # Traffic generation parameters - use from config if available
+        config = controller_config or TrafficLightConfig()
+        self.arrival_rate = getattr(config, 'arrival_rate', 1.5)  # vehicles per second per direction
+        self.saturation_flow = getattr(config, 'saturation_flow', 2.0)  # vehicles per second when green
 
         # History for analysis
         self.history = {
@@ -85,7 +86,9 @@ class SimpleTrafficSimulator:
     def discharge_traffic(self, green_directions: list, delta_time: float = 1.0):
         """
         Remove vehicles from queues based on green light with discharge rate variation.
+        Returns total vehicles discharged for tracking.
         """
+        total_discharged = 0
         for direction in green_directions:
             # Vehicles leave at saturation flow rate with some variation
             base_discharge_rate = self.saturation_flow
@@ -94,6 +97,8 @@ class SimpleTrafficSimulator:
             discharged = min(int(self.queues[direction]), discharge_rate)
             self.queues[direction] -= discharged
             self.queues[direction] = max(0, int(self.queues[direction]))
+            total_discharged += discharged
+        return total_discharged
 
     def get_vehicle_counts(self) -> tuple:
         """Get current vehicle counts as integers"""
@@ -118,12 +123,14 @@ class SimpleTrafficSimulator:
         # Generate new traffic (arrivals)
         self.generate_traffic(delta_time)
 
-        # Discharge traffic from green directions
-        self.discharge_traffic(green_directions, delta_time)
+        # Discharge traffic from green directions and track count
+        vehicles_discharged = self.discharge_traffic(green_directions, delta_time)
 
         # Get current counts and update controller
         north, south, east, west = self.get_vehicle_counts()
         self.controller.update_vehicle_counts(north, south, east, west)
+        # Report vehicles processed to controller for throughput tracking
+        self.controller.add_vehicles_processed(vehicles_discharged)
 
         # Update traffic light phase (pass delta_time for simulation time)
         new_phase = self.controller.update(delta_time)

@@ -12,7 +12,7 @@ class EnhancedTrafficLightConfig:
     
     # Core timing parameters
     min_green_time: float = 12.0      # Minimum green time in seconds
-    max_green_time: float = 50.0      # Maximum green time in seconds
+    max_green_time: float = 60.0      # Maximum green time in seconds (increased for high throughput)
     yellow_time: float = 3.5         # Yellow light duration
     all_red_time: float = 2.0        # All-red clearance interval
     
@@ -26,8 +26,8 @@ class EnhancedTrafficLightConfig:
     min_gap_time: float = 1.0        # Minimum gap time regardless of vehicle count
     
     # Traffic pattern parameters
-    arrival_rate: float = 1.8        # Base arrival rate (vehicles/second)
-    saturation_flow: float = 2.2     # Vehicles discharged per second when green
+    arrival_rate: float = 1.2        # Base arrival rate (vehicles/second) - higher throughput
+    saturation_flow: float = 3.2     # Vehicles discharged per second when green
     
     # Performance optimization
     max_queue_length: int = 20       # Maximum queue length before priority boost

@@ -53,41 +53,17 @@ class TrafficFlowModel:
                     self.max_queue
                 )
             
-            # Ensure non-negative and integer (vehicle counts are discrete)
-            self.queues[direction] = max(0, int(self.queues[direction]))
-    def detect_vehicles(self, camera_index: int) -> int:
-        """
-        Simulate vehicle detection from a camera.
-        Returns count of vehicles detected (queue length).
-        """
-        return self.traffic_model.get_vehicle_counts()[camera_index]
+            # Ensure non-negative
+            self.queues[direction] = max(0, self.queues[direction])
     
-    def get_all_detections(self) -> Tuple[int, int, int, int]:
-        """Get vehicle counts from all 4 cameras"""
-        # Update traffic model based on current signal phase
-        self.traffic_model.update(self.current_green_directions)
-        return self.traffic_model.get_vehicle_counts()
-    
-    def set_green_phase(self, directions: List[str]):
-        """Update which directions have green light (for traffic model)"""
-        self.current_green_directions = directions
-    
-    def preprocess_image(self, image: np.ndarray) -> np.ndarray:
-        """
-        Preprocess camera image for CNN input.
-        In production, this would resize, normalize, etc.
-        """
-        # Mock preprocessing - just return resized image
-        processed = np.resize(image, (416, 416, 3))
-        return processed / 255.0
-    
-    def load_model(self, model_path: str = None):
-        """
-        Load actual CNN model.
-        In production, this would load PyTorch/TensorFlow model.
-        """
-        print(f"[CNN] Model loaded from: {model_path or 'default path'}")
-        # In production: self.model = torch.load(model_path)
+    def get_vehicle_counts(self) -> Tuple[int, int, int, int]:
+        """Get current vehicle counts (queue lengths) from all cameras"""
+        return (
+            int(self.queues['north']),
+            int(self.queues['south']),
+            int(self.queues['east']),
+            int(self.queues['west'])
+        )
 
 
 class CNNDetector:
@@ -95,31 +71,31 @@ class CNNDetector:
     Mock CNN detector for traffic cameras.
     In production, this would load an actual YOLO/SSD model.
     """
-
+    
     def __init__(self, num_cameras: int = 4, confidence_threshold: float = 0.5):
         self.num_cameras = num_cameras
         self.confidence_threshold = confidence_threshold
         self.camera_positions = ['north', 'south', 'east', 'west']
         self.traffic_model = TrafficFlowModel(num_cameras)
         self.current_green_directions = ['north', 'south']  # Default phase
-
+        
     def detect_vehicles(self, camera_index: int) -> int:
         """
         Simulate vehicle detection from a camera.
         Returns count of vehicles detected (queue length).
         """
         return self.traffic_model.get_vehicle_counts()[camera_index]
-
+    
     def get_all_detections(self) -> Tuple[int, int, int, int]:
         """Get vehicle counts from all 4 cameras"""
         # Update traffic model based on current signal phase
         self.traffic_model.update(self.current_green_directions)
         return self.traffic_model.get_vehicle_counts()
-
+    
     def set_green_phase(self, directions: List[str]):
         """Update which directions have green light (for traffic model)"""
         self.current_green_directions = directions
-
+    
     def preprocess_image(self, image: np.ndarray) -> np.ndarray:
         """
         Preprocess camera image for CNN input.
@@ -128,7 +104,7 @@ class CNNDetector:
         # Mock preprocessing - just return resized image
         processed = np.resize(image, (416, 416, 3))
         return processed / 255.0
-
+    
     def load_model(self, model_path: str = None):
         """
         Load actual CNN model.
