@@ -30,7 +30,31 @@ print("=" * 100)
 print(f"{'Step':<6} {'Phase':<15} {'NS Green':<10} {'EW Green':<10} {'N':<4} {'S':<4} {'E':<4} {'W':<4} {'Throughput':<12}")
 print("-" * 100)
 
-for i in range(200):
+def draw_countdown_bar(remaining: float, total: float, width: int = 20, is_green: bool = True) -> str:
+    """Draw a draining bar showing time remaining before phase transition"""
+    if total <= 0:
+        return "[" + " " * width + "]"
+    
+    # Calculate filled portion (inverse of remaining - bar drains as time decreases)
+    filled_ratio = max(0, min(1, remaining / total))
+    filled = int(width * filled_ratio)
+    empty = width - filled
+    
+    # For green phases, ensure at least 1 tick is shown when there's any remaining time
+    # or when exactly at 0 (to indicate still green before transition)
+    if is_green:
+        if remaining > 0 and filled == 0:
+            filled = 1
+            empty = width - 1
+        elif remaining == 0 and filled == 0:
+            filled = 1
+            empty = width - 1
+    
+    # Use block characters for visual effect
+    bar = "█" * filled + "░" * empty
+    return f"[{bar}] {remaining:.1f}/{total:.1f}s"
+
+for i in range(500):
     # Dynamic arrival rate: mostly below discharge (2.5), occasional brief spikes
     base_rate = 1.0  # average arrival rate - comfortably below saturation flow
     
@@ -62,11 +86,22 @@ for i in range(200):
     ew_green = status['phase_timings'].get('EW_GREEN', 0)
     queues = result['queues']
     throughput = status['performance']['vehicle_throughput']
+    time_in_phase = status['time_in_phase']
+    remaining_time = status['remaining_time']
+    
+    # Create countdown bar for green phases
+    countdown_bar = ""
+    if phase in ['NS_GREEN', 'EW_GREEN']:
+        total_green = ns_green if phase == 'NS_GREEN' else ew_green
+        countdown_bar = " " + draw_countdown_bar(remaining_time, total_green, width=15, is_green=True)
+    else:
+        # For yellow and all-red phases, show empty bar
+        countdown_bar = " " + draw_countdown_bar(0, 1, width=15, is_green=False)
     
     # Show every step
     print(f"{i+1:<6} {phase:<15} {ns_green:<10.1f} {ew_green:<10.1f} "
           f"{queues['north']:<4} {queues['south']:<4} {queues['east']:<4} {queues['west']:<4} "
-          f"{throughput:<12.1f}")
+          f"{throughput:<12.1f}{countdown_bar}")
     time.sleep(0.2)  # 200ms delay between prints
 
 print("\n" + "=" * 100)
