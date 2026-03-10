@@ -119,13 +119,52 @@ def test_scenario(scenario_name, north, south, east, west, steps=30):
         phase = controller.update(1.0)
         status = controller.get_status()
         
+        # Simulate vehicle discharge during green phases
+        # Vehicles discharge at ~2 vehicles per second when green
+        if phase.value == 'N_GREEN' and status['vehicle_counts']['north'] > 0:
+            discharge = min(2, status['vehicle_counts']['north'])
+            new_north = max(0, status['vehicle_counts']['north'] - discharge)
+            controller.update_vehicle_counts(new_north, 
+                                           status['vehicle_counts']['south'],
+                                           status['vehicle_counts']['east'],
+                                           status['vehicle_counts']['west'])
+        elif phase.value == 'S_GREEN' and status['vehicle_counts']['south'] > 0:
+            discharge = min(2, status['vehicle_counts']['south'])
+            new_south = max(0, status['vehicle_counts']['south'] - discharge)
+            controller.update_vehicle_counts(status['vehicle_counts']['north'],
+                                           new_south,
+                                           status['vehicle_counts']['east'],
+                                           status['vehicle_counts']['west'])
+        elif phase.value == 'E_GREEN' and status['vehicle_counts']['east'] > 0:
+            discharge = min(2, status['vehicle_counts']['east'])
+            new_east = max(0, status['vehicle_counts']['east'] - discharge)
+            controller.update_vehicle_counts(status['vehicle_counts']['north'],
+                                           status['vehicle_counts']['south'],
+                                           new_east,
+                                           status['vehicle_counts']['west'])
+        elif phase.value == 'W_GREEN' and status['vehicle_counts']['west'] > 0:
+            discharge = min(2, status['vehicle_counts']['west'])
+            new_west = max(0, status['vehicle_counts']['west'] - discharge)
+            controller.update_vehicle_counts(status['vehicle_counts']['north'],
+                                           status['vehicle_counts']['south'],
+                                           status['vehicle_counts']['east'],
+                                           new_west)
+        
+        # Get updated status after discharge
+        status = controller.get_status()
+        
         # Determine which direction will likely get green next
-        next_green = "?"
-        if phase.value == 'ALL_RED':
-            # Check pressures to predict next green
-            pressures = status['pressures']
-            max_dir = max(pressures.keys(), key=lambda d: pressures[d])
-            next_green = max_dir[0].upper()  # First letter
+        # We can predict this by checking which direction has max pressure
+        # (accounting for the fairness penalties in _select_next_green_phase)
+        pressures = status['pressures']
+        max_dir = max(pressures.keys(), key=lambda d: pressures[d])
+        next_green = max_dir[0].upper()  # First letter
+        
+        # However, if we're currently in a green phase, the actual next green
+        # will be determined after we go through yellow and all-red.
+        # Show "?" only if we're in a green phase (not ALL_RED or YELLOW)
+        if phase.value.endswith('GREEN'):
+            next_green = "?"
         
         # Print step info
         if step % 3 == 0 or phase.value.endswith('GREEN'):

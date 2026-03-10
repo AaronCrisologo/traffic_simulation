@@ -77,6 +77,14 @@ class AdvancedTrafficController:
             'west': 0
         }
         
+        # Store vehicle counts at the start of each green phase for processing estimation
+        self.phase_start_counts = {
+            'north': 0,
+            'south': 0,
+            'east': 0,
+            'west': 0
+        }
+        
         # Arrival rate estimates (vehicles/sec) - learned over time
         self.arrival_rates = {
             'north': 0.5,
@@ -219,24 +227,13 @@ class AdvancedTrafficController:
         # Advance time in current phase
         self.current_phase_elapsed += delta_time
         
-        # Get current phase duration
+        # Get current phase duration (base timing from phase_timings)
         current_duration = self.phase_timings.get(self.current_phase, 0)
         
-        # Check if we should extend current green phase
-        extension = 0.0
-        if self.current_phase in self.green_phases:
-            extension = self._get_extension_time()
-            if extension > 0:
-                current_duration += extension
-        
-        # Force transition if we've exceeded maximum green time (including extensions)
-        if self.current_phase in self.green_phases:
-            base_green_time = self.phase_timings.get(self.current_phase, 0)
-            max_total_time = base_green_time + self.config.max_extension
-            if self.current_phase_elapsed >= max_total_time:
-                # Clamp current_duration to max_total_time so normal transition logic will trigger
-                # This ensures proper recording of phase duration and vehicle processing
-                current_duration = max_total_time
+        # For green phases, we need to consider that the green time was already
+        # calculated adaptively in _recalculate_all_timings() based on current vehicle counts.
+        # The phase should transition when elapsed >= current_duration.
+        # We do NOT add extensions here - the adaptive calculation already accounts for vehicles.
         
         # Check if phase should transition
         if self.current_phase_elapsed >= current_duration:
@@ -262,6 +259,10 @@ class AdvancedTrafficController:
             # Count direction change when we enter a new GREEN phase
             if self.current_phase in self.green_phases:
                 self.direction_changes += 1
+                # Capture vehicle counts at the start of the new green phase
+                direction = self._get_direction_from_phase(self.current_phase)
+                if direction:
+                    self.phase_start_counts[direction] = self.vehicle_counts[direction]
         
         return self.current_phase
     
@@ -372,15 +373,21 @@ class AdvancedTrafficController:
         if not direction:
             return
 
-        # Estimate based on green duration and saturation flow (2 vehicles/sec)
-        saturation_flow = 2.0  # vehicles per second
-        estimated_processed = min(
-            self.vehicle_counts[direction],
-            saturation_flow * self.current_phase_elapsed
-        )
-
-        self.direction_vehicles_processed[direction] += estimated_processed
-        self.total_vehicles_processed += estimated_processed
+        # Use the count at the start of this green phase
+        start_count = self.phase_start_counts.get(direction, 0)
+        current_count = self.vehicle_counts[direction]
+        
+        # Vehicles processed = start count - current count (but not negative)
+        processed = max(0, start_count - current_count)
+        
+        # If we don't have a start count (e.g., first phase), estimate based on duration
+        if start_count == 0 and self.current_phase_elapsed > 0:
+            saturation_flow = 2.0  # vehicles per second
+            estimated = min(current_count, saturation_flow * self.current_phase_elapsed)
+            processed = estimated
+        
+        self.direction_vehicles_processed[direction] += processed
+        self.total_vehicles_processed += processed
 
     def add_vehicles_processed(self, direction: str, count: int):
         """Add actual processed vehicles (called by simulator when known)"""
@@ -419,12 +426,6 @@ class AdvancedTrafficController:
     def get_remaining_time(self) -> float:
         """Get remaining time in current phase"""
         current_duration = self.phase_timings.get(self.current_phase, 0)
-        
-        # Add extension if in green phase
-        if self.current_phase in self.green_phases:
-            extension = self._get_extension_time()
-            current_duration += extension
-        
         return max(0, current_duration - self.current_phase_elapsed)
     
     def _calculate_efficiency(self) -> float:
