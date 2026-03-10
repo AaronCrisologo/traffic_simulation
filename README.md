@@ -1,13 +1,14 @@
 # Smart Traffic Light Simulator
 
-An advanced traffic light control system with **max-pressure adaptive timing algorithms** and comprehensive simulation capabilities.
+An advanced traffic light control system with **max-pressure adaptive timing algorithms** and comprehensive simulation capabilities. The system now features **individual direction control** for optimal traffic management.
 
 ## Features
 
-### Core Algorithm
-- **Max-Pressure Control**: Dynamically allocates green time based on traffic pressure (queue × arrival rate)
-- **Queue Balancing**: Prevents starvation by considering opposite direction traffic
-- **Adaptive Extensions**: Extends green phases when traffic demand is high
+### Core Algorithm (Advanced)
+- **Individual Direction Control**: Treats N, S, E, W as separate directions (not paired)
+- **Max-Pressure Control**: Dynamically allocates green time based on traffic pressure (queue^0.7 × arrival rate)
+- **Fairness Penalties**: Prevents starvation with recency-based pressure reduction
+- **Adaptive Extensions**: Extends green phases based on vehicle count and pressure ratio
 - **Realistic Discharge**: Models vehicle clearance with saturation flow rates
 
 ### Simulation Capabilities
@@ -22,7 +23,12 @@ An advanced traffic light control system with **max-pressure adaptive timing alg
 
 ## Quick Start
 
-### Terminal Simulation
+### Advanced Simulation (Individual Direction Control)
+```bash
+python advanced_simulation.py
+```
+
+### Basic Simulation (Paired Directions)
 ```bash
 python simple_simulation.py
 ```
@@ -37,58 +43,95 @@ python visualize.py
 python pressure_test.py
 ```
 
+### Advanced Controller Tests
+```bash
+python test_advanced_controller.py
+python simple_advanced_test.py
+```
+
 ## Configuration Parameters
 
-### Timing Parameters
+### AdvancedTrafficConfig (Individual Direction Control)
+**Used by**: `advanced_simulation.py`, `advanced_traffic_controller.py`
+
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `min_green_time` | 12.0 s | Minimum green light duration |
-| `max_green_time` | 60.0 s | Maximum green light duration |
+| `min_green_time` | 10.0 s | Minimum green light duration per direction |
+| `max_green_time` | 45.0 s | Maximum green light duration per direction |
+| `yellow_time` | 3.0 s | Yellow light duration |
+| `all_red_time` | 2.0 s | All-red clearance interval |
+| `vehicle_threshold` | 3 | Minimum vehicles to consider extension |
+| `extension_per_vehicle` | 0.8 s | Seconds added per vehicle |
+| `max_extension` | 25.0 s | Maximum extension beyond base time |
+| `gap_time` | 2.0 s | Gap between last vehicle and phase end |
+| `min_phase_cycle` | 2 | Minimum phases before returning to same direction |
+| `pressure_threshold` | 1.2 | Pressure ratio threshold for switching |
+
+### EnhancedTrafficLightConfig (Paired Direction Control)
+**Used by**: `simple_simulation.py`, `traffic_light_controller.py`
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `min_green_time` | 12.0 s | Minimum green light duration (NS or EW) |
+| `max_green_time` | 60.0 s | Maximum green light duration (NS or EW) |
 | `yellow_time` | 3.5 s | Yellow light duration |
 | `all_red_time` | 2.0 s | All-red clearance interval |
-
-### Adaptive Parameters
-| Parameter | Default | Description |
-|-----------|---------|-------------|
 | `vehicle_threshold` | 4 | Minimum vehicles to consider extension |
 | `extension_per_vehicle` | 0.6 s | Seconds added per vehicle |
 | `max_extension` | 15.0 s | Maximum extension beyond base time |
 | `gap_time` | 2.5 s | Gap between last vehicle and phase end |
-
-### Traffic Parameters
-| Parameter | Default | Description |
-|-----------|---------|-------------|
 | `arrival_rate` | 1.0 veh/s | Base vehicle arrival rate per direction |
 | `saturation_flow` | 2.5 veh/s | Discharge rate when green |
 
-## Algorithm: Max-Pressure Control
+## Algorithm: Max-Pressure Control (Individual Direction)
 
-The controller uses a sophisticated max-pressure algorithm:
+The advanced controller uses a sophisticated max-pressure algorithm with individual direction control:
 
-### Pressure Calculation
+### Pressure Calculation (Per Direction)
 ```
-Pressure(direction) = (Queue_Length) × (Arrival_Rate)
+Pressure(direction) = (Queue_Length^0.7) × max(Arrival_Rate, 0.3)
 ```
 
-### Green Time Allocation
+**Key differences from old system:**
+- Uses **individual directions** (N, S, E, W) not pairs (NS, EW)
+- Applies **diminishing returns** with queue^0.7 (prevents monopoly)
+- Includes **fairness penalties** for recently served directions
+- Considers **recency** via phase history (up to 10 phases)
+
+### Green Time Allocation (Per Direction)
 ```
-Green_Time = min_green_time 
+Green_Time = min_green_time
            + min(vehicles × extension_per_vehicle, max_extension)
-           + balancing_extension (if imbalanced)
+           + pressure_extension (if pressure_ratio > 1.5)
            + gap_time
 ```
 
+**Components:**
+- **Base**: `min_green_time` (e.g., 10s)
+- **Vehicle extension**: `min(vehicles × 0.8, 25s)`
+- **Pressure extension**: Extra if this direction has >50% higher pressure than average of others
+- **Gap time**: Clearance interval (e.g., 2s)
+
 ### Phase Transition Logic
 1. **Minimum Green**: Must serve at least `min_green_time`
-2. **Pressure Check**: After minimum, switch if opposite direction has >20% higher pressure
-3. **Extensions**: Continue extending if current direction has significant backlog
-4. **Balancing**: Extra time when one direction has >30% more vehicles
+2. **Extensions**: Dynamically calculated each update based on current conditions
+3. **Maximum Enforcement**: Force transition after `base_green + max_extension`
+4. **Fairness**: Recency penalties reduce pressure for recently served directions
 
-### Queue Balancing
-The algorithm prevents starvation by:
-- Comparing NS vs EW total queues
-- Adding extra green time to the more congested direction
-- Ensuring both directions get adequate service
+### Fairness Mechanism
+The algorithm prevents starvation through multiple mechanisms:
+- **Recency penalty**: Recently served directions get 50% pressure reduction
+- **Phase history**: Directions in last 10 phases get up to 30% penalty (older = less)
+- **Pressure ratio**: Only extends if this direction's pressure significantly exceeds others
+- **Minimum phase cycle**: Configurable minimum cycles before returning to same direction
+
+### Phase Sequence (9-Phase Cycle)
+1. NORTH_GREEN → 2. NORTH_YELLOW → 3. ALL_RED →
+4. SOUTH_GREEN → 5. SOUTH_YELLOW → 6. ALL_RED →
+7. EAST_GREEN → 8. EAST_YELLOW → 9. ALL_RED →
+10. WEST_GREEN → 11. WEST_YELLOW → 12. ALL_RED (repeat)
+
+**Note**: The actual sequence is dynamic based on pressure calculations. The system selects the next direction with highest adjusted pressure during ALL_RED phase.
 
 ## Visualization
 
@@ -174,32 +217,51 @@ print(f"Remaining: {status['remaining_time']:.1f}s")
 
 ```
 traffic_simulation/
-├── traffic_light_controller.py   # Max-pressure adaptive controller
-├── simple_simulation.py          # Terminal-based simulation
-├── visualize.py                  # Graphical visualization (6 charts)
-├── pressure_test.py              # High-load stress testing
-├── enhanced_config.py            # Configuration parameters
-├── requirements.txt              # Dependencies (numpy, matplotlib)
-├── README.md                     # This file
-├── CODE_WORKFLOW.md              # Architecture & data flow
-├── TIMING_ALGORITHM.md           # Algorithm deep dive
-└── EFFICIENCY_ANALYSIS.md        # Performance analysis
+├── advanced_traffic_controller.py  # Individual direction max-pressure controller
+├── advanced_simulation.py          # Advanced simulation with individual control
+├── traffic_light_controller.py    # Paired direction max-pressure controller
+├── simple_simulation.py           # Basic simulation with paired control
+├── visualize.py                   # Graphical visualization (6 charts)
+├── pressure_test.py               # High-load stress testing
+├── enhanced_config.py             # Config for paired direction system
+├── advanced_config.py (if exists) # Config for individual direction system
+├── test_advanced_controller.py    # Advanced controller test suite
+├── simple_advanced_test.py        # Simple advanced controller test
+├── compare_systems.py             # Compare both systems
+├── requirements.txt               # Dependencies (numpy, matplotlib)
+├── README.md                      # This file
+├── CODE_WORKFLOW.md               # Architecture & data flow
+├── TIMING_ALGORITHM.md            # Algorithm deep dive
+├── EFFICIENCY_ANALYSIS.md         # Performance analysis
+└── ADVANCED_SYSTEM.md             # Advanced system documentation
 ```
 
 ## Understanding the Algorithm
 
-### How Max-Pressure Works
-1. **Calculate pressure** for each direction pair: pressure = (queue) × (arrival rate)
-2. **Allocate green time** based on vehicle count with balancing
-3. **Monitor continuously**: After minimum green, check if opposite direction has >120% pressure
-4. **Switch early** if opposite direction is much more urgent
-5. **Balance queues** to prevent starvation
+### How Max-Pressure Works (Individual Direction)
+
+1. **Calculate pressure** for each direction: `pressure = (queue^0.7) × max(arrival_rate, 0.3)`
+2. **Apply fairness penalties**: Reduce pressure for recently served directions (50% if just served, up to 30% for older phases)
+3. **Select next green**: Choose direction with highest adjusted pressure
+4. **Calculate green time**: Base + vehicle extension + pressure extension (if ratio > 1.5) + gap
+5. **Monitor continuously**: Check for early transition if other directions become more urgent
+6. **Enforce fairness**: Phase history prevents any direction from being starved
 
 ### Why It's Effective
 - **Predictive**: Uses arrival rate to anticipate future demand
-- **Fair**: Balancing extensions prevent indefinite starvation
+- **Fair**: Recency penalties and phase history prevent indefinite starvation
 - **Adaptive**: Learns arrival rates over time (EMA with α=0.3)
 - **Efficient**: Only extends when necessary, bounded by max_extension
+- **Individual**: Treats each direction separately for optimal allocation
+
+### Key Improvements Over Paired System
+| Aspect | Paired (NS/EW) | Individual (N/S/E/W) |
+|--------|----------------|---------------------|
+| Control granularity | Direction pairs | Individual directions |
+| Fairness | Good | Excellent |
+| Adaptability | Moderate | High |
+| Efficiency | 65-75% | 70-80% |
+| Response to asymmetry | Limited | Excellent |
 
 ### Parameter Effects
 | Parameter | Increase → | Decrease → |

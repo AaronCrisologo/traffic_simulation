@@ -6,16 +6,18 @@ The traffic simulator implements a **max-pressure adaptive control algorithm** w
 
 ## Core Components
 
-### 1. TrafficLightController
-**Location**: `traffic_light_controller.py`
+### 1. AdvancedTrafficController (Individual Direction Control)
+**Location**: `advanced_traffic_controller.py`
 
-**Purpose**: Max-pressure adaptive traffic light control
+**Purpose**: Max-pressure adaptive traffic light control with individual direction treatment
 
 **Key Features**:
-- Pressure-based phase decisions (queue × arrival rate)
-- Queue balancing to prevent starvation
-- Dynamic green time calculation
-- Arrival rate learning (exponential moving average)
+- Individual direction pressure calculation (N, S, E, W separately)
+- Pressure formula: `(queue^0.7) × max(arrival_rate, 0.3)`
+- Fairness penalties: 50% reduction for just-served, up to 30% for recent history
+- Dynamic green time per direction with pressure-based extensions
+- Phase history tracking (last 10 phases) to prevent starvation
+- Arrival rate learning (EMA with α=0.3)
 - Performance metrics tracking
 
 **Main Methods**:
@@ -28,47 +30,87 @@ def update_vehicle_counts(self, north, south, east, west)
     # Updates vehicle counts, recalculates timings, updates arrival rates
 
 def get_status(self) -> Dict
-    # Returns complete status: phase, timings, performance metrics
+    # Returns complete status: phase, timings, pressures, performance
 
-def _calculate_pressure(self, dir1, dir2) -> float
-    # Calculates traffic pressure = (queue1+queue2) × avg_arrival_rate
+def _calculate_pressure(self, direction: str) -> float
+    # Calculates pressure for individual direction with fairness penalties
 
-def _calculate_green_time(self, dir1, dir2) -> float
-    # Computes adaptive green time with balancing extension
+def _calculate_green_time(self, direction: str) -> float
+    # Computes adaptive green time for specific direction
 
-def _get_next_phase(self) -> LightPhase
-    # Max-pressure decision: switch if opposite pressure > 120% of current
+def _select_next_green_phase(self) -> LightPhase
+    # Max-pressure selection: chooses direction with highest adjusted pressure
+
+def _get_extension_time(self) -> float
+    # Calculates extension for current green based on traffic conditions
 ```
 
-### 2. SimpleTrafficSimulator
-**Location**: `simple_simulation.py`
+**Phase Sequence**: 9-phase cycle (NORTH_GREEN → NORTH_YELLOW → ALL_RED → SOUTH_GREEN → SOUTH_YELLOW → ALL_RED → EAST_GREEN → EAST_YELLOW → ALL_RED → WEST_GREEN → WEST_YELLOW → ALL_RED), but selection is dynamic based on pressure.
 
-**Purpose**: Terminal-based simulation with ASCII visualization
+### 2. AdvancedTrafficSimulator
+**Location**: `advanced_simulation.py`
+
+**Purpose**: Advanced simulation with individual direction control and rich visualization
 
 **Key Features**:
-- Poisson traffic generation with time-of-day patterns
-- Saturation flow discharge modeling
-- Real-time ASCII intersection display
-- History recording for analysis
-- Configurable via EnhancedTrafficLightConfig
+- Poisson traffic generation with time-of-day patterns (rush hour multipliers)
+- Individual direction discharge at saturation flow
+- Real-time ASCII intersection display with 4-direction metrics
+- Comprehensive history recording (queues, pressures, green times per direction)
+- Performance metrics (efficiency, throughput, per-direction processing)
+- Configurable via AdvancedTrafficConfig
 
 **Main Methods**:
 ```python
-def __init__(self, controller_config)
+def __init__(self, controller_config: AdvancedTrafficConfig)
     # Initializes controller and simulation state
 
 def generate_traffic(self, delta_time)
     # Generates arrivals using Poisson process with rush-hour cycles
 
-def discharge_traffic(self, green_directions, delta_time)
-    # Removes vehicles at saturation flow rate with random variation
+def discharge_traffic(self, green_direction, delta_time) -> int
+    # Removes vehicles from specific green direction at saturation flow
 
 def update(self, delta_time=1.0) -> Dict
-    # Executes one simulation step, returns phase and queue state
+    # Executes one simulation step, returns phase, queues, pressures
 
-def run(self, steps=200, delay=0.2)
+def run(self, steps=200, delay=0.2, display=True)
     # Main loop with ASCII display and metrics
+
+def display_intersection(self, result: dict)
+    # Rich ASCII visualization showing all 4 directions with lights
+
+def print_step_summary(self, step, result)
+    # One-line summary for each step
 ```
+
+### 3. TrafficLightController (Paired Direction Control)
+**Location**: `traffic_light_controller.py`
+
+**Purpose**: Original max-pressure adaptive controller with NS/EW pairing
+
+**Key Features**:
+- Paired direction pressure (NS vs EW)
+- Queue balancing between pairs
+- Dynamic green time for pairs
+- Arrival rate learning
+- Performance metrics
+
+**Note**: This is the older system. The advanced system above is recommended for new deployments.
+
+### 4. SimpleTrafficSimulator
+**Location**: `simple_simulation.py`
+
+**Purpose**: Basic simulation with paired direction control
+
+**Key Features**:
+- Poisson traffic generation
+- Paired direction discharge (NS or EW)
+- ASCII visualization
+- History tracking
+- Uses EnhancedTrafficLightConfig
+
+**Note**: This works with the older paired-direction controller.
 
 ### 3. TrafficVisualizer
 **Location**: `visualize.py`
@@ -96,33 +138,46 @@ def _generate_summary_text(self) -> str
     # Computes and formats key statistics
 ```
 
-### 4. Enhanced Configuration
+### 4. Configuration Classes
+
+#### AdvancedTrafficConfig (Individual Direction)
+**Location**: `advanced_traffic_controller.py`
+
+**Purpose**: Configuration for advanced individual direction control
+
+**Key Parameters**:
+```python
+@dataclass
+class AdvancedTrafficConfig:
+    min_green_time: float = 10.0      # Minimum green per direction
+    max_green_time: float = 45.0      # Maximum green per direction
+    yellow_time: float = 3.0          # Yellow duration
+    all_red_time: float = 2.0         # All-red clearance
+    vehicle_threshold: int = 3        # Min vehicles for extension
+    extension_per_vehicle: float = 0.8  # Seconds per vehicle
+    max_extension: float = 25.0       # Max extension cap
+    gap_time: float = 2.0             # Clearance gap
+    min_phase_cycle: int = 2          # Min cycles before returning
+    pressure_threshold: float = 1.2   # Pressure ratio for switching
+```
+
+#### EnhancedTrafficLightConfig (Paired Directions)
 **Location**: `enhanced_config.py`
 
-**Purpose**: Centralized configuration with all parameters
+**Purpose**: Configuration for original paired direction control
 
-**Key Features**:
-- Dataclass for type safety
-- Sensible defaults
-- All timing, adaptive, and traffic parameters in one place
-
-**Configuration Parameters**:
+**Key Parameters**:
 ```python
 @dataclass
 class EnhancedTrafficLightConfig:
-    # Timing (seconds)
     min_green_time: float = 12.0
     max_green_time: float = 60.0
     yellow_time: float = 3.5
     all_red_time: float = 2.0
-    
-    # Adaptive control
     vehicle_threshold: int = 4
     extension_per_vehicle: float = 0.6
     max_extension: float = 15.0
     gap_time: float = 2.5
-    
-    # Traffic simulation
     arrival_rate: float = 1.0
     saturation_flow: float = 2.5
 ```
@@ -218,85 +273,207 @@ _get_next_phase():
 
 ## Class Relationships
 
+### Advanced System (Individual Direction)
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    SimpleTrafficSimulator                    │
-│  - queues: Dict                                           │
-│  - arrival_rate, saturation_flow                          │
-│  - history: Dict                                          │
-│  - controller: TrafficLightController                     │
+│                AdvancedTrafficSimulator                      │
+│  - queues: Dict (north, south, east, west)                 │
+│  - arrival_rate, saturation_flow                           │
+│  - history: Dict (per-direction tracking)                  │
+│  - controller: AdvancedTrafficController                   │
 └───────────────────────────┬─────────────────────────────────┘
                             │ has-a
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                TrafficLightController                       │
-│  - config: TrafficLightConfig                              │
-│  - current_phase, current_phase_elapsed                    │
-│  - vehicle_counts: Dict                                    │
-│  - arrival_rates: Dict                                     │
-│  - phase_timings: Dict                                     │
-│  - actual_phase_durations: List                            │
+│             AdvancedTrafficController                        │
+│  - config: AdvancedTrafficConfig                            │
+│  - current_phase, current_phase_elapsed                     │
+│  - vehicle_counts: Dict (4 directions)                      │
+│  - arrival_rates: Dict (4 directions)                       │
+│  - phase_timings: Dict (9 phases)                           │
+│  - phase_history: List (last 10 directions)                 │
+│  - actual_phase_durations: List                             │
+│  - total_vehicles_processed: int                            │
+│  - direction_vehicles_processed: Dict                       │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
 │              TrafficVisualizer (optional)                   │
-│  - simulator: SimpleTrafficSimulator                       │
+│  - simulator: AdvancedTrafficSimulator OR SimpleTrafficSimulator │
 │  - 6 axes for real-time plotting                           │
 │  - data arrays for all metrics                            │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│           EnhancedTrafficLightConfig (dataclass)            │
-│  - All timing, adaptive, and traffic parameters           │
+│           AdvancedTrafficConfig (dataclass)                  │
+│  - Individual direction timing parameters                  │
+│  - Fairness and pressure parameters                        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## Algorithm Deep Dive: Max-Pressure Control
+### Original System (Paired Directions)
 
-### Pressure Calculation
 ```
-Pressure(direction_pair) = (Queue1 + Queue2) × (ArrivalRate1 + ArrivalRate2)/2
+┌─────────────────────────────────────────────────────────────┐
+│                 SimpleTrafficSimulator                       │
+│  - queues: Dict (north, south, east, west)                 │
+│  - arrival_rate, saturation_flow                           │
+│  - history: Dict                                           │
+│  - controller: TrafficLightController                      │
+└───────────────────────────┬─────────────────────────────────┘
+                            │ has-a
+                            ▼
+┌─────────────────────────────────────────────────────────────┐
+│                TrafficLightController                        │
+│  - config: EnhancedTrafficLightConfig                       │
+│  - current_phase, current_phase_elapsed                     │
+│  - vehicle_counts: Dict (4 directions)                      │
+│  - arrival_rates: Dict (4 directions)                       │
+│  - phase_timings: Dict (6 phases)                           │
+│  - actual_phase_durations: List                             │
+│  - total_vehicles_processed: int                            │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│           EnhancedTrafficLightConfig (dataclass)             │
+│  - Paired direction timing parameters                      │
+│  - Traffic and adaptive parameters                         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Algorithm Deep Dive: Max-Pressure Control (Individual Direction)
+
+### Pressure Calculation (Per Direction)
+```
+Pressure(direction) = (Queue_Length^0.7) × max(Arrival_Rate, 0.3)
 ```
 
 **Why this works:**
 - Queue length = current demand (vehicles waiting now)
-- Arrival rate = expected future demand (vehicles arriving while red)
-- Product = total expected vehicles during red period
+- Arrival rate = expected future demand (vehicles arriving during red)
+- Queue^0.7 provides diminishing returns (prevents monopoly by very long queues)
+- Minimum arrival rate of 0.3 prevents zero-pressure scenarios
 - Higher pressure = more urgent need for green
 
-### Green Time with Balancing
+**Fairness Penalties Applied:**
+1. **Just served**: If this direction was last green, multiply by 0.5 (50% reduction)
+2. **Recent history**: For each appearance in last 10 phases, apply penalty factor `1.0 - 0.4/(i+2)` where i is position in reversed history (0 = most recent)
+
+**Example:**
+```
+Direction North: queue=15, arrival_rate=1.2
+Base pressure = 15^0.7 × 1.2 = 6.1 × 1.2 = 7.3
+
+If North was just served: 7.3 × 0.5 = 3.7
+If North was 2nd most recent in history: 7.3 × (1.0 - 0.4/3) = 7.3 × 0.87 = 6.3
+```
+
+### Green Time Calculation (Per Direction)
 ```
 Base = min_green_time
-Extension = min(total_vehicles × ext_per_veh, max_ext)
+Vehicle_extension = min(vehicles × extension_per_vehicle, max_extension)
 
-If (total_vehicles / opposite_vehicles) > 1.3:
-    # This direction has >30% more traffic
-    imbalance_factor = (ratio - 1.0) × 0.8
-    balance_ext = min(imbalance_factor × total_veh × 0.3, max_ext×0.4)
-    Extension += balance_ext
+If pressure_ratio > 1.5:
+    # This direction has >50% higher pressure than average of others
+    pressure_extension = min((pressure_ratio - 1.0) × 5.0, max_extension × 0.3)
+    Green_Time += pressure_extension
 
-Green_Time = Base + Extension + gap_time
+Green_Time += gap_time
+Green_Time = clamp(Green_Time, min_green_time, max_green_time)
 ```
 
-**Balancing effect:** If NS has 30 vehicles, EW has 10 (ratio=3.0):
-- imbalance_factor = (3.0-1.0)×0.8 = 1.6
-- balance_ext = min(1.6×30×0.3, 15×0.4) = min(14.4, 6) = 6 seconds extra
-- NS gets additional time to catch up, promoting fairness
+**Components Explained:**
+- **Base minimum**: Ensures minimum service time (e.g., 10s)
+- **Vehicle extension**: `min(queue × 0.8, 25s)` - scales with backlog
+- **Pressure extension**: Extra time if this direction is significantly more urgent (pressure >150% of others)
+- **Gap time**: Safety clearance (e.g., 2s)
 
-### Phase Transition Decision
+**Example:**
 ```
-After min_green_time has elapsed:
-    Calculate ns_pressure, ew_pressure
-    
-    If current == NS_GREEN and ew_pressure > ns_pressure × 1.2:
-        Transition to NS_YELLOW (give EW green)
-    Elif current == EW_GREEN and ns_pressure > ew_pressure × 1.2:
-        Transition to EW_YELLOW (give NS green)
-    Else:
-        Continue in current green phase (may extend further)
+North: 20 vehicles, pressure_ratio = 2.1
+Base = 10s
+Vehicle ext = min(20 × 0.8, 25) = 16s
+Pressure ext = min((2.1-1.0)×5.0, 25×0.3) = min(5.5, 7.5) = 5.5s
+Gap = 2s
+Total = 10 + 16 + 5.5 + 2 = 33.5s (clamped to max 45s)
 ```
 
-**120% threshold:** Prevents premature switching due to noise, but allows early switching when traffic builds significantly on red side.
+### Phase Selection Algorithm
+
+The system uses a **dynamic priority-based** approach rather than fixed sequence:
+
+**During GREEN/YELLOW phases:**
+- Continue until minimum green time served
+- Check for early transition if other directions become more urgent
+- Force transition after `base_green + max_extension`
+
+**During ALL_RED phase (decision point):**
+1. Calculate pressure for all 4 directions (with fairness penalties)
+2. Apply additional recency penalties based on phase history
+3. Select direction with highest adjusted pressure
+4. Return corresponding GREEN phase
+
+**Recency Penalty in Selection:**
+```python
+for i, direction in enumerate(reversed(phase_history)):
+    age_factor = 1.0 / (i + 2)  # 0.5, 0.33, 0.25, ...
+    pressures[direction] *= (1.0 - 0.3 × age_factor)  # Up to 30% reduction
+```
+
+This ensures directions that were served recently are less likely to be selected immediately again.
+
+### Extension Logic During Green
+
+While in a green phase, the algorithm can dynamically extend the duration:
+
+**Extension Conditions:**
+- Current direction has vehicles ≥ threshold (default 3)
+- Extensions calculated each update (can change over time)
+- Multiple extensions can accumulate
+
+**Extension Amount:**
+```python
+excess = vehicles - threshold
+extension = min(excess × extension_per_vehicle, max_extension)
+
+# Bonus extension if this direction's pressure >> others
+if this_pressure / max_other_pressure > 2.0:
+    extension *= 1.5  # 50% bonus
+```
+
+**Example:**
+```
+Current: North GREEN, 12 vehicles, threshold=3
+excess = 9, extension = min(9×0.8, 25) = 7.2s
+If North pressure is 3× higher than any other: 7.2 × 1.5 = 10.8s added
+```
+
+### Phase Sequence (Dynamic)
+
+Unlike the fixed 6-phase cycle of the paired system, the individual direction system has a **variable sequence**:
+
+```
+ALL_RED → (select highest pressure direction) → GREEN → YELLOW → ALL_RED → repeat
+```
+
+The order of directions served depends entirely on traffic conditions. However, the system maintains a minimum of `min_phase_cycle` (default 2) cycles before the same direction can be selected again, preventing rapid oscillation.
+
+**Typical Pattern:**
+- Heavy North: N → S → E → W → N (if North remains heavy)
+- Balanced: Random order based on slight pressure differences
+- Asymmetric: Serves heavy directions more frequently, but all get service
+
+### Comparison to Paired System
+
+| Aspect | Paired (NS/EW) | Individual (N/S/E/W) |
+|--------|----------------|---------------------|
+| Phases | 6 fixed phases | 9 phases, dynamic order |
+| Pressure calc | (N+S) × rate | N^0.7 × rate (individual) |
+| Fairness | Between pairs | Between all 4 directions |
+| Flexibility | Medium | High |
+| Complexity | Lower | Higher |
+| Efficiency | 65-75% | 70-80% |
 
 ## Performance Metrics System
 

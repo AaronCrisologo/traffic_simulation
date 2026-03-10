@@ -148,9 +148,9 @@ from advanced_traffic_controller import AdvancedTrafficController, AdvancedTraff
 
 config = AdvancedTrafficConfig(
     min_green_time=10.0,
-    max_green_time=35.0,
+    max_green_time=45.0,
     vehicle_threshold=3,
-    extension_per_vehicle=0.7
+    extension_per_vehicle=0.8
 )
 
 controller = AdvancedTrafficController(config)
