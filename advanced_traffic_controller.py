@@ -101,6 +101,7 @@ class AdvancedTrafficController:
             'east': 0,
             'west': 0
         }
+        self.direction_changes = 0  # Count of phase transitions (green→yellow→all-red→next green)
         
     def update_vehicle_counts(self, north: int, south: int, east: int, west: int):
         """Update vehicle counts from detection system"""
@@ -258,6 +259,9 @@ class AdvancedTrafficController:
             # Transition to next phase
             self.current_phase = self._get_next_phase()
             self.current_phase_elapsed = 0.0
+            # Count direction change when we enter a new GREEN phase
+            if self.current_phase in self.green_phases:
+                self.direction_changes += 1
         
         return self.current_phase
     
@@ -401,7 +405,8 @@ class AdvancedTrafficController:
                 'efficiency': efficiency,
                 'throughput': throughput,
                 'vehicles_processed': self.total_vehicles_processed,
-                'direction_processed': self.direction_vehicles_processed.copy()
+                'direction_processed': self.direction_vehicles_processed.copy(),
+                'direction_changes': self.direction_changes
             },
             'pressures': {
                 'north': self._calculate_pressure('north'),

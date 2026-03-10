@@ -264,7 +264,30 @@ class AdvancedTrafficSimulator:
         
         # Current phase and timing
         print("=" * 80)
-        print(f"Current Phase: {phase.value:15s} | Remaining: {remaining:5.1f}s")
+        
+        # Display time bar
+        bar_width = 50  # Fixed width bar
+        # Check if current phase is a green phase (has remaining time to show)
+        is_green_phase = phase.value.endswith('_GREEN')
+        
+        if is_green_phase:
+            total_allocated = status['phase_timings'].get(phase.value, 0)
+            if total_allocated > 0:
+                # Calculate percentage of time elapsed (0% at start, 100% at end)
+                elapsed = total_allocated - remaining
+                percent_elapsed = max(0.0, min(1.0, elapsed / total_allocated))
+                # Bar starts full (100% filled) and depletes to 0% as time passes
+                filled = int(bar_width * (1.0 - percent_elapsed))
+                empty = bar_width - filled
+                bar = '█' * filled + '░' * empty
+                print(f"Current Phase: {phase.value:15s} | Time Remaining: [{bar}] {remaining:5.1f}s / {total_allocated:5.1f}s")
+            else:
+                print(f"Current Phase: {phase.value:15s} | Remaining: {remaining:5.1f}s")
+        else:
+            # For YELLOW and ALL_RED phases, show fully empty bar
+            bar = '░' * bar_width
+            print(f"Current Phase: {phase.value:15s} | Time Remaining: [{bar}] N/A (yellow/all-red)")
+        
         print(f"Green Direction: {green_dir if green_dir else 'None':10s} | Vehicles discharged: {result['vehicles_discharged']:3d}")
         print()
         
@@ -283,7 +306,7 @@ class AdvancedTrafficSimulator:
         # Performance metrics
         print("Performance Metrics:")
         print(f"Efficiency: {status['performance']['efficiency']:5.1f}% | Throughput: {status['performance']['throughput']:5.1f} veh/min")
-        print(f"Total processed: {status['performance']['vehicles_processed']:5d} vehicles")
+        print(f"Total processed: {status['performance']['vehicles_processed']:5d} vehicles | Direction changes: {status['performance']['direction_changes']:3d}")
         print("=" * 80)
     
     def print_step_summary(self, step: int, result: dict):
@@ -361,6 +384,7 @@ class AdvancedTrafficSimulator:
         print(f"  Efficiency: {status['performance']['efficiency']:5.1f}%")
         print(f"  Throughput: {status['performance']['throughput']:5.1f} vehicles/min")
         print(f"  Total vehicles processed: {status['performance']['vehicles_processed']:5d}")
+        print(f"  Direction changes: {status['performance']['direction_changes']:5d}")
         
         print()
         print("Direction Processing Summary:")
@@ -405,8 +429,10 @@ def main():
     print()
     
     try:
-        # Run for 150 steps (2.5 minutes simulation time)
-        sim.run(steps=150, delay=0.15, display=True)
+        # Run for 150 steps (150 seconds = 2.5 minutes simulation time)
+        # Each step = 1 second of simulation time
+        # delay=0.2 means 200ms between displayed steps for readability
+        sim.run(steps=150, delay=1.0, display=True)
     except KeyboardInterrupt:
         print("\nSimulation stopped by user.")
 
