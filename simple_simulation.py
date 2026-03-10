@@ -69,18 +69,25 @@ class SimpleTrafficSimulator:
         self.history['performance']['throughput'].append(status['performance']['vehicle_throughput'])
 
     def generate_traffic(self, delta_time: float = 1.0):
-        """Generate new vehicles arriving at each intersection with realistic patterns"""
+        """Generate new vehicles arriving at each intersection with balanced patterns"""
         for direction in ['north', 'south', 'east', 'west']:
-            # Use different arrival rates based on time of day simulation
             base_rate = self.arrival_rate
-            if direction in ['north', 'south']:
-                # Higher traffic on NS during peak hours
-                peak_multiplier = 1.5 if (len(self.history['timestamps']) % 120) < 60 else 0.8
-                arrivals = int(random.expovariate(1.0 / (base_rate * delta_time * peak_multiplier)))
-            else:
-                # Lower traffic on EW
-                arrivals = int(random.expovariate(1.0 / (base_rate * delta_time * 0.7)))
-
+            
+            # Balanced time-of-day pattern: all directions affected equally
+            # Simulate rush hour cycles (2-hour cycle)
+            cycle_position = len(self.history['timestamps']) % 120
+            if cycle_position < 30:  # Morning rush
+                time_multiplier = 1.4
+            elif cycle_position < 90:  # Normal daytime
+                time_multiplier = 1.0
+            else:  # Evening rush
+                time_multiplier = 1.3
+            
+            # Small random variation per direction (±10%)
+            direction_variation = random.uniform(0.9, 1.1)
+            
+            effective_rate = base_rate * time_multiplier * direction_variation
+            arrivals = int(random.expovariate(1.0 / (effective_rate * delta_time)))
             self.queues[direction] = int(self.queues[direction]) + arrivals
 
     def discharge_traffic(self, green_directions: list, delta_time: float = 1.0):
